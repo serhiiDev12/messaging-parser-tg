@@ -1,3 +1,0 @@
-module.exports=[27572,a=>{"use strict";var b=a.i(7997);a.s(["default",0,function({children:a}){return(0,b.jsxs)("html",{lang:"en",className:"dark",children:[(0,b.jsxs)("head",{children:[(0,b.jsx)("link",{rel:"icon",type:"image/svg+xml",href:"/favicon.svg"}),(0,b.jsx)("script",{async:!0,src:"https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-XXXXXXXXXXXXXXXX",crossOrigin:"anonymous"})]}),(0,b.jsx)("body",{children:a})]})},"metadata",0,{title:"Telegram Chat Parser — PDF & HTML to Text",description:"Convert Telegram PDF or HTML chat exports into clean, readable text files. Free, private, browser-based."}])},50645,a=>{a.n(a.i(27572))}];
-
-//# sourceMappingURL=src_app_layout_tsx_0r5yz5t._.js.map
