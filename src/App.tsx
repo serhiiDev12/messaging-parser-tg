@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { FileDropzone } from "@/components/FileDropzone";
 import { PageSelector } from "@/components/PageSelector";
+import { AdBanner } from "@/components/AdBanner";
 import { Button } from "@/components/ui/button";
 import { Progress, ProgressLabel, ProgressValue } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
@@ -167,6 +168,9 @@ function App() {
       </div>
 
       <div className="mx-auto max-w-2xl px-3 py-6 sm:px-4 sm:py-12">
+        {/* Top Ad Banner */}
+        <AdBanner className="mb-8 min-h-[100px] bg-card/20 sm:min-h-[120px]" />
+
         {/* Header */}
         <header className="mb-6 text-center sm:mb-10">
           <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-[11px] font-medium text-primary sm:mb-4 sm:px-4 sm:py-1.5 sm:text-xs">
@@ -394,6 +398,9 @@ function App() {
             )}
           </CardContent>
         </Card>
+
+        {/* Bottom Ad Banner */}
+        <AdBanner className="mt-8 min-h-[100px] bg-card/20 sm:min-h-[120px]" />
 
         {/* Footer */}
         <footer className="mt-6 text-center text-[10px] text-muted-foreground/50 sm:mt-8 sm:text-xs">
