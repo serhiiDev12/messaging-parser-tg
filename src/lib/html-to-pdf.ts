@@ -65,22 +65,27 @@ export async function convertHtmlToPdf(
     }
   `;
 
-  // We need to render this HTML somewhere.
-  const container = document.createElement("div");
+  // We need to render this HTML somewhere isolated so it doesn't inherit 
+  // Tailwind's global styles (which use oklch/lab colors that crash html2canvas).
+  const iframe = document.createElement("iframe");
+  iframe.style.position = "absolute";
+  iframe.style.top = "-9999px";
+  iframe.style.left = "-9999px";
+  iframe.style.width = "800px";
+  iframe.style.border = "none";
+  document.body.appendChild(iframe);
+  
+  const idoc = iframe.contentDocument || iframe.contentWindow?.document;
+  if (!idoc) throw new Error("Failed to create isolated rendering frame");
+
+  const container = idoc.createElement("div");
   container.className = "telegram-pdf-container";
-  container.style.position = "absolute";
-  container.style.top = "-9999px";
-  container.style.left = "-9999px";
-  container.style.width = "800px";
-  
-  // Copy body contents
   container.innerHTML = doc.body.innerHTML;
+  idoc.body.appendChild(container);
   
-  // Also append the style to the main document so it applies to the container
-  const mainStyle = document.createElement("style");
+  const mainStyle = idoc.createElement("style");
   mainStyle.textContent = styleText;
-  container.appendChild(mainStyle);
-  document.body.appendChild(container);
+  idoc.head.appendChild(mainStyle);
   
   onProgress?.(50);
   
@@ -88,7 +93,7 @@ export async function convertHtmlToPdf(
     margin:       10,
     filename:     file.name.replace(/\.html$/i, "") + "_converted.pdf",
     image:        { type: 'jpeg', quality: 0.98 },
-    html2canvas:  { scale: 2, useCORS: true },
+    html2canvas:  { scale: 2, useCORS: true, windowWidth: 800 },
     jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
   };
   
@@ -99,7 +104,7 @@ export async function convertHtmlToPdf(
   await html2pdf().set(opt).from(container).save();
   
   // Cleanup
-  document.body.removeChild(container);
+  document.body.removeChild(iframe);
   
   onProgress?.(100);
 }
