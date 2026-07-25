@@ -60,7 +60,8 @@ function App() {
 
   const handleGenerate = useCallback(async () => {
     if (files.length === 0) return;
-    if (files.length === 1 && selectedPages.size === 0) return;
+    const isSinglePdf = files.length === 1 && (files[0].type === "application/pdf" || files[0].name.endsWith(".pdf"));
+    if (isSinglePdf && selectedPages.size === 0) return;
 
     setState("parsing");
     setProgress(0);
@@ -154,7 +155,8 @@ function App() {
   const isParsing = state === "parsing";
   const canGenerate =
     (state === "ready" || state === "done" || state === "error") &&
-    (files.length > 1 || (files.length === 1 && selectedPages.size > 0));
+    (files.length > 1 || 
+     (files.length === 1 && (files[0].type !== "application/pdf" && !files[0].name.endsWith(".pdf") || selectedPages.size > 0)));
 
   return (
     <div className="dark min-h-screen bg-background">
