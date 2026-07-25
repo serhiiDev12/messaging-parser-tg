@@ -1,10 +1,16 @@
 version: 1
 frontend:
   phases:
+    preBuild:
+      commands:
+        - npm ci
     build:
       commands:
-        - echo "Build is handled by GitHub Actions"
+        - npm run build
   artifacts:
-    baseDirectory: /
+    baseDirectory: dist
     files:
       - '**/*'
+  cache:
+    paths:
+      - node_modules/**/*
