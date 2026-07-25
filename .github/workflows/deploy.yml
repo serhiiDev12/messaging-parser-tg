@@ -1,0 +1,66 @@
+name: Deploy to AWS Amplify
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  build-and-deploy:
+    name: Build & Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build production bundle
+        run: npm run build
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Deploy to Amplify
+        run: |
+          # Create a zip of the build output
+          cd dist
+          zip -r ../deploy.zip .
+          cd ..
+
+          # Create a new deployment
+          DEPLOY_RESULT=$(aws amplify create-deployment \
+            --app-id ${{ secrets.AMPLIFY_APP_ID }} \
+            --branch-name main \
+            --output json)
+
+          JOB_ID=$(echo $DEPLOY_RESULT | jq -r '.jobId')
+          UPLOAD_URL=$(echo $DEPLOY_RESULT | jq -r '.zipUploadUrl')
+
+          # Upload the build artifacts
+          curl -T deploy.zip "$UPLOAD_URL"
+
+          # Start the deployment
+          aws amplify start-deployment \
+            --app-id ${{ secrets.AMPLIFY_APP_ID }} \
+            --branch-name main \
+            --job-id "$JOB_ID"
+
+          echo "✅ Deployment started (Job ID: $JOB_ID)"
