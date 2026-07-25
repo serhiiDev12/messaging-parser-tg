@@ -2,14 +2,14 @@ import { useCallback, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
 interface FileDropzoneProps {
-  onFileSelect: (file: File) => void;
-  selectedFile: File | null;
+  onFilesSelect: (files: File[]) => void;
+  selectedFiles: File[];
   disabled?: boolean;
 }
 
 export function FileDropzone({
-  onFileSelect,
-  selectedFile,
+  onFilesSelect,
+  selectedFiles,
   disabled = false,
 }: FileDropzoneProps) {
   const [isDragOver, setIsDragOver] = useState(false);
@@ -37,12 +37,14 @@ export function FileDropzone({
       setIsDragOver(false);
       if (disabled) return;
 
-      const file = e.dataTransfer.files[0];
-      if (file && file.type === "application/pdf") {
-        onFileSelect(file);
+      const files = Array.from(e.dataTransfer.files).filter(
+        (file) => file.type === "application/pdf"
+      );
+      if (files.length > 0) {
+        onFilesSelect(files);
       }
     },
-    [disabled, onFileSelect]
+    [disabled, onFilesSelect]
   );
 
   const handleClick = () => {
@@ -50,9 +52,11 @@ export function FileDropzone({
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      onFileSelect(file);
+    const files = Array.from(e.target.files || []).filter(
+      (file) => file.type === "application/pdf"
+    );
+    if (files.length > 0) {
+      onFilesSelect(files);
     }
   };
 
@@ -79,14 +83,15 @@ export function FileDropzone({
         "flex flex-col items-center justify-center gap-2 p-5 sm:gap-3 sm:p-8",
         "group hover:border-primary/50 hover:bg-primary/5",
         isDragOver && "border-primary bg-primary/10 scale-[1.02]",
-        !isDragOver && !selectedFile && "border-muted-foreground/25",
-        selectedFile && "border-primary/30 bg-primary/5",
+        !isDragOver && selectedFiles.length === 0 && "border-muted-foreground/25",
+        selectedFiles.length > 0 && "border-primary/30 bg-primary/5",
         disabled && "pointer-events-none opacity-50"
       )}
     >
       <input
         ref={inputRef}
         type="file"
+        multiple
         accept=".pdf,application/pdf"
         onChange={handleChange}
         className="hidden"
@@ -97,12 +102,12 @@ export function FileDropzone({
       <div
         className={cn(
           "flex h-10 w-10 items-center justify-center rounded-full transition-all duration-300 sm:h-14 sm:w-14",
-          selectedFile
+          selectedFiles.length > 0
             ? "bg-primary/15 text-primary"
             : "bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary"
         )}
       >
-        {selectedFile ? (
+        {selectedFiles.length > 0 ? (
           <svg
             xmlns="http://www.w3.org/2000/svg"
             width="24"
@@ -137,17 +142,24 @@ export function FileDropzone({
         )}
       </div>
 
-      {selectedFile ? (
+      {selectedFiles.length > 0 ? (
         <div className="text-center">
-          <p className="text-sm font-medium text-foreground">{selectedFile.name}</p>
+          <p className="text-sm font-medium text-foreground">
+            {selectedFiles.length === 1
+              ? selectedFiles[0].name
+              : `${selectedFiles.length} files selected`}
+          </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            {formatSize(selectedFile.size)} · Click or drop to replace
+            {formatSize(
+              selectedFiles.reduce((acc, file) => acc + file.size, 0)
+            )}{" "}
+            · Click or drop to replace
           </p>
         </div>
       ) : (
         <div className="text-center">
           <p className="text-sm font-medium text-foreground">
-            Drop your Telegram PDF here
+            Drop your Telegram PDFs here
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
             or click to browse · PDF files only

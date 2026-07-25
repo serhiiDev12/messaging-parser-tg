@@ -16,7 +16,7 @@ import { parseTelegramPdf, formatMessages, getPdfPageCount } from "@/lib/telegra
 type AppState = "idle" | "loading-pages" | "ready" | "parsing" | "done" | "error";
 
 function App() {
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [state, setState] = useState<AppState>("idle");
   const [progress, setProgress] = useState(0);
   const [outputText, setOutputText] = useState("");
@@ -27,32 +27,40 @@ function App() {
   const [totalPages, setTotalPages] = useState(0);
   const [selectedPages, setSelectedPages] = useState<Set<number>>(new Set());
 
-  const handleFileSelect = useCallback(async (selectedFile: File) => {
-    setFile(selectedFile);
+  const handleFilesSelect = useCallback(async (selectedFiles: File[]) => {
+    setFiles(selectedFiles);
     setOutputText("");
     setErrorMsg("");
     setProgress(0);
     setMessageCount(0);
 
-    // Detect page count
-    setState("loading-pages");
-    try {
-      const count = await getPdfPageCount(selectedFile);
-      setTotalPages(count);
-      // Select all pages by default
-      const allPages = new Set<number>();
-      for (let i = 1; i <= count; i++) allPages.add(i);
-      setSelectedPages(allPages);
+    if (selectedFiles.length === 1) {
+      // Detect page count for single file to show PageSelector
+      setState("loading-pages");
+      try {
+        const count = await getPdfPageCount(selectedFiles[0]);
+        setTotalPages(count);
+        // Select all pages by default
+        const allPages = new Set<number>();
+        for (let i = 1; i <= count; i++) allPages.add(i);
+        setSelectedPages(allPages);
+        setState("ready");
+      } catch (err) {
+        console.error("Failed to read PDF:", err);
+        setState("error");
+        setErrorMsg("Failed to read PDF file. Make sure it's a valid PDF.");
+      }
+    } else {
+      // For multiple files, we parse everything
+      setTotalPages(0);
+      setSelectedPages(new Set());
       setState("ready");
-    } catch (err) {
-      console.error("Failed to read PDF:", err);
-      setState("error");
-      setErrorMsg("Failed to read PDF file. Make sure it's a valid PDF.");
     }
   }, []);
 
   const handleGenerate = useCallback(async () => {
-    if (!file || selectedPages.size === 0) return;
+    if (files.length === 0) return;
+    if (files.length === 1 && selectedPages.size === 0) return;
 
     setState("parsing");
     setProgress(0);
@@ -60,23 +68,46 @@ function App() {
     setErrorMsg("");
 
     try {
-      const messages = await parseTelegramPdf(
-        file,
-        (p) => setProgress(p),
-        selectedPages
-      );
+      let allMessages: any[] = [];
+      
+      // Sort files by name to ensure chronological order for multi-part exports (e.g. messages.pdf, messages2.pdf)
+      const sortedFiles = [...files].sort((a, b) => {
+        // Extract numbers from filenames if present (e.g. "messages2.pdf" -> 2)
+        const aMatch = a.name.match(/\d+/);
+        const bMatch = b.name.match(/\d+/);
+        if (aMatch && bMatch) {
+          return parseInt(aMatch[0]) - parseInt(bMatch[0]);
+        }
+        return a.name.localeCompare(b.name);
+      });
+      
+      for (let i = 0; i < sortedFiles.length; i++) {
+        const currentFile = sortedFiles[i];
+        const fileMessages = await parseTelegramPdf(
+          currentFile,
+          (p) => {
+            // Calculate global progress
+            const fileWeight = 100 / sortedFiles.length;
+            const previousFilesProgress = i * fileWeight;
+            const currentFileProgress = p * (fileWeight / 100);
+            setProgress(previousFilesProgress + currentFileProgress);
+          },
+          sortedFiles.length === 1 ? selectedPages : undefined // Undefined means all pages
+        );
+        allMessages = allMessages.concat(fileMessages);
+      }
 
-      if (messages.length === 0) {
+      if (allMessages.length === 0) {
         setState("error");
         setErrorMsg(
-          "No messages found in the selected pages. Try selecting different pages or check the PDF format."
+          "No messages found. Try selecting different pages or check the PDF format."
         );
         return;
       }
 
-      const formatted = formatMessages(messages);
+      const formatted = formatMessages(allMessages);
       setOutputText(formatted);
-      setMessageCount(messages.length);
+      setMessageCount(allMessages.length);
       setState("done");
       setProgress(100);
     } catch (err) {
@@ -88,7 +119,7 @@ function App() {
           : "An unexpected error occurred while parsing the PDF."
       );
     }
-  }, [file, selectedPages]);
+  }, [files, selectedPages]);
 
   const handleDownload = useCallback(() => {
     if (!outputText) return;
@@ -96,17 +127,17 @@ function App() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = file
-      ? file.name.replace(/\.pdf$/i, "") + "_parsed.txt"
-      : "telegram_chat.txt";
+    a.download = files.length === 1
+      ? files[0].name.replace(/\.pdf$/i, "") + "_parsed.txt"
+      : "telegram_chat_combined.txt";
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-  }, [outputText, file]);
+  }, [outputText, files]);
 
   const handleReset = useCallback(() => {
-    setFile(null);
+    setFiles([]);
     setState("idle");
     setProgress(0);
     setOutputText("");
@@ -119,7 +150,7 @@ function App() {
   const isParsing = state === "parsing";
   const canGenerate =
     (state === "ready" || state === "done" || state === "error") &&
-    selectedPages.size > 0;
+    (files.length > 1 || (files.length === 1 && selectedPages.size > 0));
 
   return (
     <div className="dark min-h-screen bg-background">
@@ -168,8 +199,8 @@ function App() {
           <CardContent className="space-y-4 sm:space-y-5">
             {/* File Dropzone */}
             <FileDropzone
-              onFileSelect={handleFileSelect}
-              selectedFile={file}
+              onFilesSelect={handleFilesSelect}
+              selectedFiles={files}
               disabled={isParsing}
             />
 
@@ -194,11 +225,11 @@ function App() {
               </div>
             )}
 
-            {/* Page Selector */}
-            {totalPages > 0 && state !== "loading-pages" && (
+            {/* Page Selector (only for single file) */}
+            {files.length === 1 && totalPages > 0 && state !== "loading-pages" && (
               <div className="animate-in fade-in-0 slide-in-from-top-2 duration-300">
                 <PageSelector
-                  file={file!}
+                  file={files[0]}
                   totalPages={totalPages}
                   selectedPages={selectedPages}
                   onSelectionChange={setSelectedPages}
@@ -268,7 +299,9 @@ function App() {
                     >
                       <polygon points="6 3 20 12 6 21 6 3" />
                     </svg>
-                    {selectedPages.size > 0 && selectedPages.size < totalPages
+                    {files.length > 1
+                      ? `Generate (${files.length} files)`
+                      : selectedPages.size > 0 && selectedPages.size < totalPages
                       ? `Generate (${selectedPages.size} pages)`
                       : "Generate"}
                   </>
