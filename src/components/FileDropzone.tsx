@@ -38,7 +38,7 @@ export function FileDropzone({
       if (disabled) return;
 
       const files = Array.from(e.dataTransfer.files).filter(
-        (file) => file.type === "application/pdf"
+        (file) => file.type === "application/pdf" || file.type === "text/html" || file.name.endsWith(".html")
       );
       if (files.length > 0) {
         onFilesSelect(files);
@@ -53,7 +53,7 @@ export function FileDropzone({
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []).filter(
-      (file) => file.type === "application/pdf"
+      (file) => file.type === "application/pdf" || file.type === "text/html" || file.name.endsWith(".html")
     );
     if (files.length > 0) {
       onFilesSelect(files);
@@ -92,7 +92,7 @@ export function FileDropzone({
         ref={inputRef}
         type="file"
         multiple
-        accept=".pdf,application/pdf"
+        accept=".pdf,application/pdf,.html,text/html"
         onChange={handleChange}
         className="hidden"
         id="pdf-file-input"
@@ -159,10 +159,10 @@ export function FileDropzone({
       ) : (
         <div className="text-center">
           <p className="text-sm font-medium text-foreground">
-            Drop your Telegram PDFs here
+            Drop your Telegram files here
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            or click to browse · PDF files only
+            or click to browse · PDF & HTML files
           </p>
         </div>
       )}

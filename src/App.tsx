@@ -11,7 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { parseTelegramPdf, formatMessages, getPdfPageCount } from "@/lib/telegram-parser";
+import { parseTelegramPdf, parseTelegramHtml, formatMessages, getPdfPageCount } from "@/lib/telegram-parser";
 
 type AppState = "idle" | "loading-pages" | "ready" | "parsing" | "done" | "error";
 
@@ -34,8 +34,8 @@ function App() {
     setProgress(0);
     setMessageCount(0);
 
-    if (selectedFiles.length === 1) {
-      // Detect page count for single file to show PageSelector
+    if (selectedFiles.length === 1 && selectedFiles[0].type === "application/pdf") {
+      // Detect page count for single PDF file to show PageSelector
       setState("loading-pages");
       try {
         const count = await getPdfPageCount(selectedFiles[0]);
@@ -51,7 +51,7 @@ function App() {
         setErrorMsg("Failed to read PDF file. Make sure it's a valid PDF.");
       }
     } else {
-      // For multiple files, we parse everything
+      // For multiple files or single HTML, we parse everything
       setTotalPages(0);
       setSelectedPages(new Set());
       setState("ready");
@@ -83,17 +83,21 @@ function App() {
       
       for (let i = 0; i < sortedFiles.length; i++) {
         const currentFile = sortedFiles[i];
-        const fileMessages = await parseTelegramPdf(
-          currentFile,
-          (p) => {
-            // Calculate global progress
-            const fileWeight = 100 / sortedFiles.length;
-            const previousFilesProgress = i * fileWeight;
-            const currentFileProgress = p * (fileWeight / 100);
-            setProgress(previousFilesProgress + currentFileProgress);
-          },
-          sortedFiles.length === 1 ? selectedPages : undefined // Undefined means all pages
-        );
+        
+        const progressCallback = (p: number) => {
+          // Calculate global progress
+          const fileWeight = 100 / sortedFiles.length;
+          const previousFilesProgress = i * fileWeight;
+          const currentFileProgress = p * (fileWeight / 100);
+          setProgress(previousFilesProgress + currentFileProgress);
+        };
+
+        const isPdf = currentFile.type === "application/pdf" || currentFile.name.endsWith(".pdf");
+        
+        const fileMessages = isPdf 
+          ? await parseTelegramPdf(currentFile, progressCallback, sortedFiles.length === 1 ? selectedPages : undefined)
+          : await parseTelegramHtml(currentFile, progressCallback);
+          
         allMessages = allMessages.concat(fileMessages);
       }
 
@@ -115,8 +119,8 @@ function App() {
       setState("error");
       setErrorMsg(
         err instanceof Error
-          ? `Failed to parse PDF: ${err.message}`
-          : "An unexpected error occurred while parsing the PDF."
+          ? `Failed to parse files: ${err.message}`
+          : "An unexpected error occurred while parsing the files."
       );
     }
   }, [files, selectedPages]);
@@ -180,19 +184,19 @@ function App() {
             Telegram Chat Parser
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-4xl">
-            PDF to Text Converter
+            Chat Export Converter
           </h1>
           <p className="mt-2 text-xs text-muted-foreground sm:mt-3 sm:text-sm">
-            Upload a Telegram-exported PDF chat and convert it to clean, readable text.
+            Upload Telegram-exported PDF or HTML chats and convert them to clean, readable text.
           </p>
         </header>
 
         {/* Main Card */}
         <Card className="border-0 ring-foreground/5 shadow-2xl shadow-black/20">
           <CardHeader>
-            <CardTitle>Upload Chat PDF</CardTitle>
+            <CardTitle>Upload Chat Export</CardTitle>
             <CardDescription>
-              Export your Telegram chat as PDF, then drop it below
+              Export your Telegram chat as PDF or HTML, then drop it below
             </CardDescription>
           </CardHeader>
 
@@ -225,8 +229,8 @@ function App() {
               </div>
             )}
 
-            {/* Page Selector (only for single file) */}
-            {files.length === 1 && totalPages > 0 && state !== "loading-pages" && (
+            {/* Page Selector (only for single PDF file) */}
+            {files.length === 1 && files[0].type === "application/pdf" && totalPages > 0 && state !== "loading-pages" && (
               <div className="animate-in fade-in-0 slide-in-from-top-2 duration-300">
                 <PageSelector
                   file={files[0]}
@@ -243,7 +247,7 @@ function App() {
               <div className="animate-in fade-in-0 slide-in-from-top-2 duration-300">
                 <Progress value={progress} className="gap-1.5">
                   <ProgressLabel className="text-muted-foreground">
-                    {isParsing ? "Parsing PDF…" : "Complete"}
+                    {isParsing ? "Parsing files…" : "Complete"}
                   </ProgressLabel>
                   <ProgressValue />
                 </Progress>

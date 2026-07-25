@@ -262,3 +262,49 @@ export function formatMessages(messages: ParsedMessage[]): string {
     .map((m) => `${m.sender}:\n${m.message}`)
     .join("\n");
 }
+
+/**
+ * Parse a Telegram HTML export file.
+ */
+export async function parseTelegramHtml(
+  file: File,
+  onProgress?: (progress: number) => void
+): Promise<ParsedMessage[]> {
+  const text = await file.text();
+  onProgress?.(50); // Reading file takes the most time
+  
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(text, "text/html");
+  
+  const messages: ParsedMessage[] = [];
+  const messageElements = doc.querySelectorAll(".message.default");
+  
+  let currentSender = "Unknown";
+  
+  messageElements.forEach((msgEl) => {
+    // Check for sender name
+    const fromNameEl = msgEl.querySelector(".from_name");
+    if (fromNameEl && fromNameEl.textContent) {
+      currentSender = fromNameEl.textContent.trim();
+    }
+    
+    // Extract message text
+    const textEl = msgEl.querySelector(".text");
+    if (textEl) {
+      // Clone to safely replace <br> with \n without altering the original DOM tree
+      const clone = textEl.cloneNode(true) as HTMLElement;
+      clone.querySelectorAll("br").forEach(br => br.replaceWith("\n"));
+      
+      const messageText = clone.textContent?.trim();
+      if (messageText) {
+        messages.push({
+          sender: currentSender,
+          message: messageText
+        });
+      }
+    }
+  });
+  
+  onProgress?.(100);
+  return messages;
+}
