@@ -65,27 +65,22 @@ export async function convertHtmlToPdf(
     }
   `;
 
-  // We need to render this HTML somewhere isolated so it doesn't inherit 
-  // Tailwind's global styles (which use oklch/lab colors that crash html2canvas).
-  const iframe = document.createElement("iframe");
-  iframe.style.position = "absolute";
-  iframe.style.top = "-9999px";
-  iframe.style.left = "-9999px";
-  iframe.style.width = "800px";
-  iframe.style.border = "none";
-  document.body.appendChild(iframe);
-  
-  const idoc = iframe.contentDocument || iframe.contentWindow?.document;
-  if (!idoc) throw new Error("Failed to create isolated rendering frame");
-
-  const container = idoc.createElement("div");
+  // We render the HTML in a hidden container in the main document.
+  const container = document.createElement("div");
   container.className = "telegram-pdf-container";
+  container.style.position = "absolute";
+  container.style.top = "-9999px";
+  container.style.left = "-9999px";
+  container.style.width = "800px";
   container.innerHTML = doc.body.innerHTML;
-  idoc.body.appendChild(container);
   
-  const mainStyle = idoc.createElement("style");
+  // Create our custom style and give it a specific ID so we can preserve it
+  const mainStyle = document.createElement("style");
+  mainStyle.id = "telegram-pdf-style";
   mainStyle.textContent = styleText;
-  idoc.head.appendChild(mainStyle);
+  container.appendChild(mainStyle);
+  
+  document.body.appendChild(container);
   
   onProgress?.(50);
   
@@ -93,7 +88,19 @@ export async function convertHtmlToPdf(
     margin:       10,
     filename:     file.name.replace(/\.html$/i, "") + "_converted.pdf",
     image:        { type: 'jpeg', quality: 0.98 },
-    html2canvas:  { scale: 2, useCORS: true, windowWidth: 800 },
+    html2canvas:  { 
+      scale: 2, 
+      useCORS: true, 
+      windowWidth: 800,
+      // CRITICAL FIX: Ignore all global Tailwind stylesheets to prevent 
+      // html2canvas from crashing on unsupported 'lab' or 'oklch' color functions.
+      ignoreElements: (el: Element) => {
+        if ((el.tagName === "STYLE" || el.tagName === "LINK") && el.id !== "telegram-pdf-style") {
+          return true;
+        }
+        return false;
+      }
+    },
     jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
   };
   
@@ -104,7 +111,7 @@ export async function convertHtmlToPdf(
   await html2pdf().set(opt).from(container).save();
   
   // Cleanup
-  document.body.removeChild(iframe);
+  document.body.removeChild(container);
   
   onProgress?.(100);
 }
