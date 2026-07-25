@@ -15,8 +15,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { parseTelegramPdf, parseTelegramHtml, formatMessages, getPdfPageCount } from "@/lib/telegram-parser";
+import { convertHtmlToPdf } from "@/lib/html-to-pdf";
 
-type AppState = "idle" | "loading-pages" | "ready" | "parsing" | "done" | "error";
+type AppState = "idle" | "loading-pages" | "ready" | "parsing" | "generating-pdf" | "done" | "error";
 
 function MainApp() {
   const [files, setFiles] = useState<File[]>([]);
@@ -129,6 +130,38 @@ function MainApp() {
     }
   }, [files, selectedPages]);
 
+  const handleHtmlToPdf = useCallback(async () => {
+    const htmlFiles = files.filter(f => f.type === "text/html" || f.name.endsWith(".html"));
+    if (htmlFiles.length === 0) return;
+
+    setState("generating-pdf");
+    setProgress(0);
+    setErrorMsg("");
+
+    try {
+      for (let i = 0; i < htmlFiles.length; i++) {
+        const file = htmlFiles[i];
+        const progressCallback = (p: number) => {
+          const fileWeight = 100 / htmlFiles.length;
+          const previousFilesProgress = i * fileWeight;
+          const currentFileProgress = p * (fileWeight / 100);
+          setProgress(previousFilesProgress + currentFileProgress);
+        };
+        await convertHtmlToPdf(file, progressCallback);
+      }
+      setState("ready"); // Or idle, but ready lets them still generate text
+      setProgress(100);
+    } catch (err) {
+      console.error("PDF generation error:", err);
+      setState("error");
+      setErrorMsg(
+        err instanceof Error
+          ? `Failed to generate PDF: ${err.message}`
+          : "An unexpected error occurred while generating the PDF."
+      );
+    }
+  }, [files]);
+
   const handleDownload = useCallback(() => {
     if (!outputText) return;
     const blob = new Blob([outputText], { type: "text/plain;charset=utf-8" });
@@ -155,11 +188,13 @@ function MainApp() {
     setSelectedPages(new Set());
   }, []);
 
-  const isParsing = state === "parsing";
+  const isParsing = state === "parsing" || state === "generating-pdf";
   const canGenerate =
     (state === "ready" || state === "done" || state === "error") &&
     (files.length > 1 || 
      (files.length === 1 && (files[0].type !== "application/pdf" && !files[0].name.endsWith(".pdf") || selectedPages.size > 0)));
+
+  const hasHtmlFiles = files.some(f => f.type === "text/html" || f.name.endsWith(".html"));
 
   return (
     <div className="dark min-h-screen bg-background">
@@ -255,7 +290,7 @@ function MainApp() {
               <div className="animate-in fade-in-0 slide-in-from-top-2 duration-300">
                 <Progress value={progress} className="gap-1.5">
                   <ProgressLabel className="text-muted-foreground">
-                    {isParsing ? "Parsing files…" : "Complete"}
+                    {state === "generating-pdf" ? "Generating PDF…" : isParsing ? "Parsing files…" : "Complete"}
                   </ProgressLabel>
                   <ProgressValue />
                 </Progress>
@@ -319,6 +354,34 @@ function MainApp() {
                   </>
                 )}
               </Button>
+
+              {hasHtmlFiles && (
+                <Button
+                  id="html-to-pdf-btn"
+                  size="lg"
+                  variant="secondary"
+                  onClick={handleHtmlToPdf}
+                  disabled={!canGenerate && state !== "generating-pdf"}
+                  className="transition-all duration-200"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="mr-2"
+                  >
+                    <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+                    <polyline points="14 2 14 8 20 8" />
+                  </svg>
+                  Make HTML a PDF File
+                </Button>
+              )}
 
               {state === "done" && (
                 <Button
