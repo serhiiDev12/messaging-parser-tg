@@ -66,12 +66,15 @@ export async function convertHtmlToPdf(
   `;
 
   // We render the HTML in a hidden container in the main document.
+  // We use a wrapper to move it off-screen so html2canvas doesn't copy the negative top/left styles to the clone!
+  const wrapper = document.createElement("div");
+  wrapper.style.position = "absolute";
+  wrapper.style.top = "-9999px";
+  wrapper.style.left = "-9999px";
+  wrapper.style.width = "800px";
+
   const container = document.createElement("div");
   container.className = "telegram-pdf-container";
-  container.style.position = "absolute";
-  container.style.top = "-9999px";
-  container.style.left = "-9999px";
-  container.style.width = "800px";
   container.innerHTML = doc.body.innerHTML;
   
   // Create our custom style and give it a specific ID so we can preserve it
@@ -80,7 +83,8 @@ export async function convertHtmlToPdf(
   mainStyle.textContent = styleText;
   container.appendChild(mainStyle);
   
-  document.body.appendChild(container);
+  wrapper.appendChild(container);
+  document.body.appendChild(wrapper);
   
   onProgress?.(50);
   
@@ -111,7 +115,7 @@ export async function convertHtmlToPdf(
   await html2pdf().set(opt).from(container).save();
   
   // Cleanup
-  document.body.removeChild(container);
+  document.body.removeChild(wrapper);
   
   onProgress?.(100);
 }
